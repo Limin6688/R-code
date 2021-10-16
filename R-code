@@ -1,6 +1,6 @@
 library(corrplot)
 setwd("C:\\Users\\correlation")     
-rt=read.table("m6Aexp.txt",sep="\t",header=T,row.names=1,check.names=F)
+rt=read.table("target1.txt",sep="\t",header=T,row.names=1,check.names=F)
 rt=t(rt)
 res1 <- cor.mtest(rt, conf.level = 0.95)
 
@@ -26,7 +26,7 @@ library("survival")
 setwd("C:\\Users\\lasso")              
 rt$futime=rt$futime/365
 
-gene=read.table("gene.txt",header=F)
+gene=read.table("target2.txt",header=F)
 rt=rt[,c("futime","fustat",as.vector(gene[,1]))]
 
 x=as.matrix(rt[,c(3:ncol(rt))])
@@ -62,7 +62,7 @@ write.table(cbind(id=rownames(outTab),outTab),
 	
 setwd("C:\\Users\\survival")   
 library(survival)
-rt=read.table("lassoRisk.txt",header=T,sep="\t")
+rt=read.table("target3.txt",header=T,sep="\t")
 diff=survdiff(Surv(futime, fustat) ~risk,data = rt)
 pValue=1-pchisq(diff$chisq,df=1)
 #pValue=round(pValue,3)
@@ -88,7 +88,7 @@ dev.off()
 
 library(survivalROC)
 setwd("C:\\Users\\ROC")     
-rt=read.table("lassoRisk.txt",header=T,sep="\t",check.names=F,row.names=1)   
+rt=read.table("target4.txt",header=T,sep="\t",check.names=F,row.names=1)   
 pdf(file="ROC.pdf",width=6,height=6)
 par(oma=c(0.5,1,0,1),font.lab=1.5,font.axis=1.5)
 roc=survivalROC(Stime=rt$futime, status=rt$fustat, marker = rt$riskScore, 
