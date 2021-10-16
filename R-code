@@ -1,0 +1,101 @@
+library(corrplot)
+setwd("C:\\Users\\correlation")     
+rt=read.table("m6Aexp.txt",sep="\t",header=T,row.names=1,check.names=F)
+rt=t(rt)
+res1 <- cor.mtest(rt, conf.level = 0.95)
+
+pdf("correlation.pdf",height=8,width=8)             
+corrplot(corr=cor(rt),
+         method = "circle",
+         order = "hclust",
+         tl.col="black",
+         addCoef.col = "black",
+         p.mat = res1$p,
+         sig.level = 0.001,
+         insig = "pch",
+         number.cex = 1,
+         type = "upper",
+         col=colorRampPalette(c("blue", "white", "red"))(50),
+         )
+dev.off()
+
+
+library("glmnet")
+library("survival")
+
+setwd("C:\\Users\\lasso")              
+rt$futime=rt$futime/365
+
+gene=read.table("gene.txt",header=F)
+rt=rt[,c("futime","fustat",as.vector(gene[,1]))]
+
+x=as.matrix(rt[,c(3:ncol(rt))])
+y=data.matrix(Surv(rt$futime,rt$fustat))
+
+fit <- glmnet(x, y, family = "cox", maxit = 1000)
+pdf("lambda.pdf")
+plot(fit, xvar = "lambda", label = TRUE)
+dev.off()
+
+cvfit <- cv.glmnet(x, y, family="cox", maxit = 1000)
+pdf("cvfit.pdf")
+plot(cvfit)
+abline(v=log(c(cvfit$lambda.min,cvfit$lambda.1se)),lty="dashed")
+dev.off()
+
+coef <- coef(fit, s = cvfit$lambda.min)
+index <- which(coef != 0)
+actCoef <- coef[index]
+lassoGene=row.names(coef)[index]
+geneCoef=cbind(Gene=lassoGene,Coef=actCoef)
+write.table(geneCoef,file="geneCoef.txt",sep="\t",quote=F,row.names=F)
+
+riskScore=predict(cvfit, newx = x, s = "lambda.min",type="response")
+outCol=c("futime","fustat",lassoGene)
+risk=as.vector(ifelse(riskScore>median(riskScore),"high","low"))
+outTab=cbind(rt[,outCol],riskScore=as.vector(riskScore),risk)
+write.table(cbind(id=rownames(outTab),outTab),
+    file="lassoRisk.txt",
+    sep="\t",
+    quote=F,
+    row.names=F)
+	
+setwd("C:\\Users\\survival")   
+library(survival)
+rt=read.table("lassoRisk.txt",header=T,sep="\t")
+diff=survdiff(Surv(futime, fustat) ~risk,data = rt)
+pValue=1-pchisq(diff$chisq,df=1)
+#pValue=round(pValue,3)
+pValue=signif(pValue,4)
+pValue=format(pValue, scientific = TRUE)
+
+fit <- survfit(Surv(futime, fustat) ~ risk, data = rt)
+summary(fit)   
+pdf(file="survival.pdf",width=5.5,height=5)
+plot(fit, 
+     lwd=2,
+     col=c("red","blue"),
+     xlab="Time (year)",
+     ylab="Survival rate",
+     main=paste("Survival curve (p=", pValue ,")",sep=""),
+     mark.time=T)
+legend("topright", 
+       c("high risk", "low risk"),
+       lwd=2,
+       col=c("red","blue"))
+dev.off()
+
+
+library(survivalROC)
+setwd("C:\\Users\\ROC")     
+rt=read.table("lassoRisk.txt",header=T,sep="\t",check.names=F,row.names=1)   
+pdf(file="ROC.pdf",width=6,height=6)
+par(oma=c(0.5,1,0,1),font.lab=1.5,font.axis=1.5)
+roc=survivalROC(Stime=rt$futime, status=rt$fustat, marker = rt$riskScore, 
+      predict.time =5, method="KM")
+plot(roc$FP, roc$TP, type="l", xlim=c(0,1), ylim=c(0,1),col='red', 
+  xlab="False positive rate", ylab="True positive rate",
+  main=paste("ROC curve (", "AUC = ",round(roc$AUC,3),")"),
+  lwd = 2, cex.main=1.3, cex.lab=1.2, cex.axis=1.2, font=1.2)
+abline(0,1)
+dev.off()
